@@ -1,6 +1,11 @@
 import { Exercise } from './exercise';
 
 export interface Workout {
-  date: Date;
+  id: string;
+  title: string;
+  date: string;
   exercises: Exercise[];
+  notes?: string;
+  totalVolume?: number;
+  xpEarned?: number;
 }
