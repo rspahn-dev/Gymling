@@ -1,53 +1,56 @@
-> Edited for use in IDX on 07/09/12
+﻿# Gymling
 
-# Welcome to your Expo app 👋
+Gymling is a gamified fitness companion built with Expo + React Native. Each workout feeds your creature, unlocks gear, and rotates fresh monsters to battle. The app now launches with a creature-first dashboard, an onboarding flow for naming/customising your pal, and an improved arena card that surfaces energy, cooldown, and matchup hints.
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+## Features
+- **Creature progression:** Log workouts to gain XP, raise stats, and evolve your companion.
+- **Battle arena:** Fight monsters within 10 levels, review cooldown/energy at a glance, and launch cinematic duels.
+- **Workout logging & streaks:** Every session tracks XP, volume, streaks, and personal records (with bonus XP for new PRs).
+- **Persistent settings:** Creature name/photo, player stats, and battle prep all live in AsyncStorage so state survives app restarts.
+- **Multi-platform Expo Router app:** File‑based routing with dedicated screens for creature details, battle prep, workouts, and settings.
 
-## Get started
+## Getting started
+`ash
+npm install
+npx expo start
+`
+Pick /i/w to launch Android, iOS, or web. For a clean Metro cache use 
+px expo start --clear.
 
-#### Android
+### First-run creature onboarding
+On first launch (or after clearing storage) you'll be prompted to:
+1. **Name your creature.** This label appears across the home screen, battle logs, and creature tab.
+2. **Upload a portrait.** Tap “Choose Photo” to pick an image from the device library. This can be skipped temporarily, but the reminder reappears until both a name and photo are saved.
+3. **Save creature.** The profile writes to AsyncStorage and unlocks the rest of the app. You can always revisit the Settings tab to change the name/photo later.
 
-Android previews are defined as a `workspace.onStart` hook and started as a vscode task when the workspace is opened/started.
+### Changing monster pictures
+All monster art is driven by the icon field inside [constants/monsters.ts](constants/monsters.ts). To swap an image:
+1. Open that file and locate the monster you want to update.
+2. Replace the icon URL with a new square image (ideally 96×96 or larger) hosted on the web or served locally via expo-asset.
+3. Save the file and reload Metro (
+px expo start --clear) so the updated art flows through both the rotation list and duel screens.
 
-Note, if you can't find the task, either:
-- Rebuild the environment (using command palette: `IDX: Rebuild Environment`), or
-- Run `npm run android -- --tunnel` command manually run android and see the output in your terminal. The device should pick up this new command and switch to start displaying the output from it.
+## Updated home experience
+- The landing screen now highlights your creature’s portrait, level, XP progress, stat grid, and quick actions for Battle Arena, Log Workout, and View Workouts.
+- An arena-status callout summarises trainer XP and current energy (pulled from the shared player stats hook), ensuring you always know if you can fight or need to log a workout.
 
-In the output of this command/task, you'll find options to open the app in a
+## Project structure
+`
+app/
+  index.tsx          # Creature-first home + onboarding modal
+  battle/            # Battle list + duel cinematic
+  creature.tsx       # Creature overview
+  workout.tsx        # Workout logger with PR bonuses + templates
+  (tabs)/workouts.tsx# Workout log, streak tracker, PR gallery
+components/
+hooks/               # use-creature + use-player-stats wrappers
+constants/monsters.ts# Monster data + icon URLs
+lib/battle.ts        # Battle simulation + prep constants
+`
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+## Development tips
+- **Hot reload:** Metro + Expo Go support live reloading when you edit files inside pp/.
+- **Clearing local state:** Delete the Gymling app from the Expo Go client or wipe AsyncStorage via dev tools to re-trigger onboarding.
+- **Image picker permissions:** Ensure the Expo Go client has photo-library permission when testing creature onboarding or settings.
 
-You'll also find options to open the app's developer menu, reload the app, and more.
-
-#### Web
-
-Web previews will be started and managred automatically. Use the toolbar to manually refresh.
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
-
-```bash
-npm run reset-project
-```
-
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
-
-## Learn more
-
-To learn more about developing your project with Expo, look at the following resources:
-
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
-
-## Join the community
-
-Join our community of developers creating universal apps.
-
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+Happy training!

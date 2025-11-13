@@ -12,4 +12,5 @@ export interface Monster {
   description: string;
   xpReward: number;
   featuredLoot: string;
+  icon: string;
 }

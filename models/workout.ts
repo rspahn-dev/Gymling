@@ -1,4 +1,5 @@
 import { Exercise } from './exercise';
+import { PRAchievement } from './personalRecord';
 
 export interface Workout {
   id: string;
@@ -8,4 +9,5 @@ export interface Workout {
   notes?: string;
   totalVolume?: number;
   xpEarned?: number;
+  prAchievements?: PRAchievement[];
 }

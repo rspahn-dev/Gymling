@@ -10,6 +10,7 @@ const normalizeCreature = (data: Partial<Creature> | null | undefined): Creature
     ...initialCreature.stats,
     ...(data?.stats ?? {}),
   };
+  const bag = data?.bag ?? initialCreature.bag;
 
   return {
     ...initialCreature,
@@ -20,6 +21,7 @@ const normalizeCreature = (data: Partial<Creature> | null | undefined): Creature
       typeof data?.xpToNext === 'number' && data.xpToNext > 0
         ? data.xpToNext
         : initialCreature.xpToNext,
+    bag,
   };
 };
 

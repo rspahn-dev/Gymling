@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+﻿import React, { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   Pressable,
@@ -8,12 +8,15 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { getData, storeData } from '@/utils/storage';
+import { getMaxEnergyForLevel } from '@/lib/energy';
 import type { Workout } from '@/models/workout';
 import type { Exercise } from '@/models/exercise';
 import type { WorkoutSet } from '@/models/workoutSet';
 import type { Creature } from '@/models/creature';
+import type { PersonalRecordMap, PRAchievement } from '@/models/personalRecord';
 import { checkEvolution } from '@/models/evolution';
 import { ThemedView } from '@/components/themed-view';
 import { ThemedText } from '@/components/themed-text';
@@ -25,6 +28,8 @@ type WorkoutTemplate = {
   name: string;
   workout: Workout;
 };
+
+type StatBoost = Partial<Record<keyof Creature['stats'], number>>;
 
 const createEmptyWorkout = (): Workout => ({
   id: Date.now().toString(),
@@ -47,6 +52,105 @@ const createWorkoutFromTemplate = (workout: Workout): Workout => ({
   exercises: deepCopyExercises(workout.exercises),
 });
 
+const computeStatBoosts = (
+  workout: Workout,
+  totalVolume: number,
+  totalSets: number,
+  achievements: PRAchievement[],
+): StatBoost => {
+  const prStrength = achievements.filter((achievement) => achievement.metric === 'maxWeight').length;
+  const prVolume = achievements.filter((achievement) => achievement.metric === 'totalVolume').length;
+  return {
+    str: Math.max(0, Math.floor(totalVolume / 800)) + prStrength,
+    sta: Math.max(0, Math.floor(totalSets / 6)),
+    agi: Math.max(0, Math.floor(workout.exercises.length / 3)),
+    int: (workout.notes?.trim().length ? 1 : 0) + prVolume,
+  };
+};
+const placeholderColor = '#94A3B8';
+
+const PR_XP_BONUS = 35;
+
+type ExercisePerformanceSummary = {
+  maxWeight: number;
+  totalVolume: number;
+};
+
+const normalizeExerciseName = (value: string) => value.trim().toLowerCase();
+
+const summarizeExercisePerformance = (exercise: Exercise): ExercisePerformanceSummary =>
+  exercise.sets.reduce(
+    (acc, set) => {
+      const weight = Number(set.weight) || 0;
+      const reps = Number(set.reps) || 0;
+      const volume = weight * reps;
+      if (weight > acc.maxWeight) {
+        acc.maxWeight = weight;
+      }
+      acc.totalVolume += volume;
+      return acc;
+    },
+    { maxWeight: 0, totalVolume: 0 },
+  );
+
+const evaluatePersonalRecords = (
+  exercises: Exercise[],
+  records: PersonalRecordMap,
+  workoutId: string,
+  date: string,
+): { updatedRecords: PersonalRecordMap; achievements: PRAchievement[] } => {
+  const updatedRecords: PersonalRecordMap = { ...records };
+  const achievements: PRAchievement[] = [];
+
+  exercises.forEach((exercise) => {
+    const label = exercise.name.trim();
+    if (!label) {
+      return;
+    }
+    const stats = summarizeExercisePerformance(exercise);
+    if (stats.maxWeight <= 0 && stats.totalVolume <= 0) {
+      return;
+    }
+    const key = normalizeExerciseName(label);
+    const record = updatedRecords[key];
+
+    let metric: PRAchievement['metric'] | null = null;
+    let previousValue: number | undefined;
+    let newValue = 0;
+
+    if (stats.maxWeight > (record?.maxWeight ?? 0)) {
+      metric = 'maxWeight';
+      previousValue = record?.maxWeight;
+      newValue = stats.maxWeight;
+    } else if (stats.totalVolume > (record?.totalVolume ?? 0)) {
+      metric = 'totalVolume';
+      previousValue = record?.totalVolume;
+      newValue = stats.totalVolume;
+    }
+
+    if (metric) {
+      achievements.push({
+        exercise: label,
+        metric,
+        previousValue,
+        newValue,
+        xpBonus: PR_XP_BONUS,
+        date,
+      });
+      updatedRecords[key] = {
+        id: key,
+        exercise: label,
+        maxWeight: Math.max(stats.maxWeight, record?.maxWeight ?? 0),
+        totalVolume: Math.max(stats.totalVolume, record?.totalVolume ?? 0),
+        updatedAt: date,
+        workoutId,
+      };
+    }
+  });
+
+  return { updatedRecords, achievements };
+};
+
 const calculateWorkoutMetrics = (workout: Workout) => {
   let totalVolume = 0;
   let totalSets = 0;
@@ -62,7 +166,7 @@ const calculateWorkoutMetrics = (workout: Workout) => {
   return { totalVolume, totalSets, xpPreview };
 };
 
-const applyXpGain = (creature: Creature, xpGain: number): Creature => {
+const applyXpGain = (creature: Creature, xpGain: number, statBoost: StatBoost = {}): Creature => {
   let xp = creature.xp + xpGain;
   let xpToNext = creature.xpToNext;
   let level = creature.level;
@@ -80,6 +184,13 @@ const applyXpGain = (creature: Creature, xpGain: number): Creature => {
     };
   }
 
+  stats = {
+    str: stats.str + (statBoost.str ?? 0),
+    agi: stats.agi + (statBoost.agi ?? 0),
+    sta: stats.sta + (statBoost.sta ?? 0),
+    int: stats.int + (statBoost.int ?? 0),
+  };
+
   return checkEvolution({
     ...creature,
     level,
@@ -93,6 +204,7 @@ export default function NewWorkoutScreen() {
   const router = useRouter();
   const { creature, updateCreature, isCreatureLoading } = useCreature();
   const { playerStats, updatePlayerStats, isPlayerStatsLoading } = usePlayerStats();
+  const insets = useSafeAreaInsets();
   const [workout, setWorkout] = useState<Workout>(createEmptyWorkout());
   const [templates, setTemplates] = useState<WorkoutTemplate[]>([]);
   const [templateName, setTemplateName] = useState('');
@@ -239,29 +351,51 @@ export default function NewWorkoutScreen() {
     }
     setIsSaving(true);
     try {
-      const xpEarned = xpPreview;
+      const personalRecords =
+        ((await getData('personalRecords')) as PersonalRecordMap | null) ?? {};
       const workoutLog =
         ((await getData('workoutLog')) as { workouts: Workout[] } | null) ?? {
           workouts: [],
         };
+      const workoutId = Date.now().toString();
+      const workoutDate = new Date().toISOString();
+      const { updatedRecords, achievements } = evaluatePersonalRecords(
+        workout.exercises,
+        personalRecords,
+        workoutId,
+        workoutDate,
+      );
+      const prBonus = achievements.reduce((sum, pr) => sum + pr.xpBonus, 0);
+      const xpEarned = xpPreview + prBonus;
       const workoutToSave: Workout = {
         ...workout,
-        id: Date.now().toString(),
-        date: new Date().toISOString(),
+        id: workoutId,
+        date: workoutDate,
         totalVolume,
         xpEarned,
+        prAchievements: achievements,
         exercises: deepCopyExercises(workout.exercises),
       };
+      const statBoost = computeStatBoosts(workoutToSave, totalVolume, totalSets, achievements);
+      const nextCreature = applyXpGain(creature, xpEarned, statBoost);
       workoutLog.workouts = [workoutToSave, ...(workoutLog.workouts ?? [])];
       await storeData('workoutLog', workoutLog);
+      if (achievements.length > 0) {
+        await storeData('personalRecords', updatedRecords);
+      }
 
-      await updateCreature((current) => applyXpGain(current, xpEarned));
+      await updateCreature(() => nextCreature);
       await updatePlayerStats({
         xp: (playerStats?.xp ?? 0) + xpEarned,
+        energy: getMaxEnergyForLevel(nextCreature.level),
       });
+      await storeData('battleLock', null);
 
+      const bonusText = achievements.length
+        ? ` (including +${prBonus} XP for ${achievements.length} new PR${achievements.length > 1 ? 's' : ''})`
+        : '';
       setStatusMessage(
-        `Workout saved! ${creature.name || 'Your creature'} gained +${xpEarned} XP.`,
+        `Workout saved! ${creature.name || 'Your creature'} gained +${xpEarned} XP${bonusText}.`,
       );
       setWorkout(createEmptyWorkout());
       router.back();
@@ -275,16 +409,23 @@ export default function NewWorkoutScreen() {
 
   return (
     <ThemedView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scrollContent}>
+      <ScrollView
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingTop: insets.top + 16, paddingBottom: Math.max(insets.bottom, 32) },
+        ]}
+      >
         <ThemedText style={styles.title}>Log Workout</ThemedText>
         <TextInput
           placeholder="Workout title"
+          placeholderTextColor={placeholderColor}
           value={workout.title}
           onChangeText={(text) => setWorkout((prev) => ({ ...prev, title: text }))}
           style={[styles.textInput, styles.lightInput]}
         />
         <TextInput
           placeholder="Notes (optional)"
+          placeholderTextColor={placeholderColor}
           value={workout.notes}
           onChangeText={(text) => setWorkout((prev) => ({ ...prev, notes: text }))}
           style={[styles.textInput, styles.notesInput, styles.lightInput]}
@@ -311,12 +452,13 @@ export default function NewWorkoutScreen() {
         </Pressable>
 
         {workout.exercises.map((exercise, exerciseIndex) => (
-          <View key={`${exercise.name}-${exerciseIndex}`} style={styles.exerciseCard}>
+          <View key={`exercise-${exerciseIndex}`} style={styles.exerciseCard}>
             <View style={styles.exerciseHeader}>
               <TextInput
                 value={exercise.name}
                 onChangeText={(text) => handleExerciseNameChange(text, exerciseIndex)}
                 style={styles.exerciseName}
+                placeholderTextColor={placeholderColor}
                 placeholder={`Exercise ${exerciseIndex + 1}`}
               />
               <Pressable onPress={() => removeExercise(exerciseIndex)}>
@@ -330,6 +472,7 @@ export default function NewWorkoutScreen() {
                   <TextInput
                     keyboardType="numeric"
                     value={set.reps.toString()}
+                    placeholderTextColor={placeholderColor}
                     onChangeText={(value) =>
                       handleSetChange(exerciseIndex, setIndex, 'reps', value)
                     }
@@ -341,6 +484,7 @@ export default function NewWorkoutScreen() {
                   <TextInput
                     keyboardType="numeric"
                     value={set.weight.toString()}
+                    placeholderTextColor={placeholderColor}
                     onChangeText={(value) =>
                       handleSetChange(exerciseIndex, setIndex, 'weight', value)
                     }
@@ -419,14 +563,18 @@ export default function NewWorkoutScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#020617',
   },
   scrollContent: {
     padding: 20,
+    paddingBottom: 32,
     gap: 16,
   },
   title: {
     fontSize: 28,
     fontWeight: '700',
+    color: '#F8FAFC',
+    textAlign: 'center',
   },
   textInput: {
     borderWidth: 1,
@@ -434,6 +582,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 12,
     color: '#E2E8F0',
+    backgroundColor: '#0F172A',
   },
   lightInput: {
     color: '#F8FAFC',
@@ -448,14 +597,14 @@ const styles = StyleSheet.create({
   },
   metricCard: {
     flex: 1,
-    backgroundColor: '#111E33',
+    backgroundColor: '#0D1B2A',
     borderRadius: 12,
     padding: 12,
     borderWidth: 1,
     borderColor: '#1F2A44',
   },
   metricLabel: {
-    color: '#94A3B8',
+    color: '#E2E8F0',
     fontSize: 12,
     marginBottom: 4,
   },
@@ -490,7 +639,7 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   exerciseCard: {
-    backgroundColor: '#111E33',
+    backgroundColor: '#0D1B2A',
     borderRadius: 16,
     borderWidth: 1,
     borderColor: '#1F2A44',
@@ -519,7 +668,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   setLabel: {
-    color: '#94A3B8',
+    color: '#CBD5F5',
     fontSize: 12,
   },
   setInput: {
@@ -555,7 +704,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   helperText: {
-    color: '#94A3B8',
+    color: '#E2E8F0',
+    textAlign: 'center',
   },
   templateCard: {
     flexDirection: 'row',
@@ -571,7 +721,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   templateMeta: {
-    color: '#94A3B8',
+    color: '#E2E8F0',
     fontSize: 12,
   },
   templateActions: {
@@ -583,7 +733,24 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   statusMessage: {
-    color: '#94A3B8',
+    color: '#F8FAFC',
     textAlign: 'center',
   },
 });
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

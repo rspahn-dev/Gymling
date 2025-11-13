@@ -14,6 +14,7 @@ export const monsters: Monster[] = [
       'A regenerative serpent that splits into new heads when struck. Target the core crystal to stop the regen.',
     xpReward: 120,
     featuredLoot: 'Phoenix Feather',
+    icon: 'https://images.unsplash.com/photo-1508674861872-a51e06c50c9b?w=96&h=96&fit=crop',
   },
   {
     id: 'storm-wyrm',
@@ -27,6 +28,7 @@ export const monsters: Monster[] = [
     description: 'Sweeps the arena with charged winds that punish low agility.',
     xpReward: 100,
     featuredLoot: 'Tempest Scale',
+    icon: 'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?w=96&h=96&fit=crop',
   },
   {
     id: 'iron-golem',
@@ -40,6 +42,7 @@ export const monsters: Monster[] = [
     description: 'Slow but unyielding guardian forged from haunted steel.',
     xpReward: 90,
     featuredLoot: 'Shard of Fortitude',
+    icon: 'https://images.unsplash.com/photo-1489515217757-5fd1be406fef?w=96&h=96&fit=crop',
   },
   {
     id: 'night-geist',
@@ -53,6 +56,7 @@ export const monsters: Monster[] = [
     description: 'Phases in and out of reality to siphon stamina.',
     xpReward: 110,
     featuredLoot: 'Void Cloak',
+    icon: 'https://images.unsplash.com/photo-1500534314209-a25ddb2bd429?w=96&h=96&fit=crop',
   },
   {
     id: 'ember-rat',
@@ -66,6 +70,7 @@ export const monsters: Monster[] = [
     description: 'A fiery scavenger that ignites the ground with each scurry.',
     xpReward: 60,
     featuredLoot: 'Cinder Tail',
+    icon: 'https://images.unsplash.com/photo-1474511320723-9a56873867b5?w=96&h=96&fit=crop',
   },
   {
     id: 'sapling-guardian',
@@ -79,6 +84,7 @@ export const monsters: Monster[] = [
     description: 'A tiny treant that defends the forest with thorny vines.',
     xpReward: 35,
     featuredLoot: 'Verdant Twig',
+    icon: 'https://images.unsplash.com/photo-1469474968028-56623f02e42e?w=96&h=96&fit=crop',
   },
   {
     id: 'tidal-sprite',
@@ -92,6 +98,7 @@ export const monsters: Monster[] = [
     description: 'Splashes attackers with bursts of pressurized surf.',
     xpReward: 40,
     featuredLoot: 'Bubble Pearl',
+    icon: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=96&h=96&fit=crop',
   },
   {
     id: 'gale-fox',
@@ -105,6 +112,7 @@ export const monsters: Monster[] = [
     description: 'Dashes around opponents, slicing with wind-forged tails.',
     xpReward: 50,
     featuredLoot: 'Wind Tail',
+    icon: 'https://images.unsplash.com/photo-1518791841217-8f162f1e1131?w=96&h=96&fit=crop',
   },
   {
     id: 'dune-scorpion',
@@ -118,6 +126,7 @@ export const monsters: Monster[] = [
     description: 'Ambushes foes beneath the sand with venom-tipped claws.',
     xpReward: 70,
     featuredLoot: 'Sting Barbs',
+    icon: 'https://images.unsplash.com/photo-1500534310680-81a9a0c3c061?w=96&h=96&fit=crop',
   },
   {
     id: 'glacier-owl',
@@ -131,6 +140,7 @@ export const monsters: Monster[] = [
     description: 'Freezes prey mid-flight with glacial winds.',
     xpReward: 80,
     featuredLoot: 'Frost Feather',
+    icon: 'https://images.unsplash.com/photo-1501706362039-c6e08e4b7b9f?w=96&h=96&fit=crop',
   },
   {
     id: 'pyro-colossus',
@@ -144,6 +154,7 @@ export const monsters: Monster[] = [
     description: 'An ancient molten sentinel that erupts with magma fists.',
     xpReward: 150,
     featuredLoot: 'Inferno Core',
+    icon: 'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?w=96&h=96&fit=crop',
   },
   {
     id: 'void-singer',
@@ -157,6 +168,7 @@ export const monsters: Monster[] = [
     description: 'Channels cosmic echoes to shatter defenses.',
     xpReward: 180,
     featuredLoot: 'Echo Shard',
+    icon: 'https://images.unsplash.com/photo-1500534310680-81a9a0c3c061?w=96&h=96&fit=crop',
   },
   {
     id: 'terra-leviathan',
@@ -170,6 +182,7 @@ export const monsters: Monster[] = [
     description: 'A slumbering behemoth that crushes foes with tectonic waves.',
     xpReward: 210,
     featuredLoot: 'Gaia Scale',
+    icon: 'https://images.unsplash.com/photo-1441974231531-c6227db76b6e?w=96&h=96&fit=crop',
   },
   {
     id: 'astral-phoenix',
@@ -183,5 +196,6 @@ export const monsters: Monster[] = [
     description: 'Reborn from stardust, bathes the arena in celestial fire.',
     xpReward: 260,
     featuredLoot: 'Stellar Plume',
+    icon: 'https://images.unsplash.com/photo-1441974231531-c6227db76b6e?w=96&h=96&fit=crop',
   },
 ];

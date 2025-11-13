@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+﻿import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, ScrollView, Image } from 'react-native';
 import { Link } from 'expo-router';
 import { useCreature } from '@/hooks/use-creature';
@@ -53,7 +53,7 @@ export default function CreatureScreen() {
           <Text style={styles.helperText}>
             Customize your companion&apos;s name and portrait from the Settings tab.
           </Text>
-          <Link href="/(tabs)/settings" style={styles.settingsLink}>
+          <Link href="/settings" style={styles.settingsLink}>
             Go to Settings
           </Link>
         </View>
@@ -87,6 +87,27 @@ export default function CreatureScreen() {
               </View>
             </View>
           ))}
+        </View>
+
+        <Text style={styles.sectionTitle}>Bag</Text>
+        <View style={styles.bagList}>
+          {creature.bag && creature.bag.length > 0 ? (
+            creature.bag.map((item) => (
+              <View key={item.id} style={styles.bagItem}>
+                {item.icon && item.icon.startsWith('http') ? (
+                  <Image source={{ uri: item.icon }} style={styles.bagIconImage} />
+                ) : (
+                  <Text style={styles.bagIconEmoji}>{item.icon ?? 'ðŸŽ’'}</Text>
+                )}
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.bagItemName}>{item.name}</Text>
+                  <Text style={styles.bagItemDescription}>{item.description}</Text>
+                </View>
+              </View>
+            ))
+          ) : (
+            <Text style={styles.helperText}>Your bag is empty. Battle monsters to earn loot.</Text>
+          )}
         </View>
       </View>
     </ScrollView>
@@ -231,4 +252,34 @@ const styles = StyleSheet.create({
     height: '100%',
     backgroundColor: '#38BDF8',
   },
+  bagList: {
+    backgroundColor: '#111E33',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#1F2A44',
+    padding: 16,
+    gap: 12,
+  },
+  bagItem: {
+    flexDirection: 'row',
+    gap: 12,
+    alignItems: 'center',
+  },
+  bagIconImage: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+  },
+  bagIconEmoji: {
+    fontSize: 28,
+  },
+  bagItemName: {
+    color: '#F8FAFC',
+    fontWeight: '600',
+  },
+  bagItemDescription: {
+    color: '#94A3B8',
+    fontSize: 13,
+  },
 });
+

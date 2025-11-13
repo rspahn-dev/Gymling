@@ -1,3 +1,10 @@
+﻿import { ThemedText } from '@/components/themed-text';
+import { ThemedView } from '@/components/themed-view';
+import type { PersonalRecord, PersonalRecordMap } from '@/models/personalRecord';
+import type { Workout } from '@/models/workout';
+import type { WorkoutLog } from '@/models/workoutLog';
+import { getData } from '@/utils/storage';
+import { useFocusEffect, useRouter } from 'expo-router';
 import React, { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
@@ -7,12 +14,7 @@ import {
   Text,
   View,
 } from 'react-native';
-import { useFocusEffect, useRouter } from 'expo-router';
-import { getData } from '@/utils/storage';
-import type { Workout } from '@/models/workout';
-import type { WorkoutLog } from '@/models/workoutLog';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const formatDate = (value: string) => {
   const date = new Date(value);
@@ -26,10 +28,80 @@ const formatDate = (value: string) => {
   });
 };
 
+const DAY_MS = 1000 * 60 * 60 * 24;
+
+const toDateKey = (value: string | Date) => {
+  const date = typeof value === 'string' ? new Date(value) : value;
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+  return date.toISOString().slice(0, 10);
+};
+
+const stepDateKey = (key: string, delta: number) => {
+  const date = new Date(key);
+  if (Number.isNaN(date.getTime())) {
+    return key;
+  }
+  date.setUTCDate(date.getUTCDate() + delta);
+  return date.toISOString().slice(0, 10);
+};
+
+const computeStreakStats = (entries: Workout[]) => {
+  if (!entries.length) {
+    return { current: 0, best: 0 };
+  }
+  const dateKeys = entries
+    .map((workout) => toDateKey(workout.date))
+    .filter((key): key is string => Boolean(key));
+  if (!dateKeys.length) {
+    return { current: 0, best: 0 };
+  }
+  const unique = Array.from(new Set(dateKeys)).sort();
+  let best = 0;
+  let run = 0;
+  let prev: string | null = null;
+
+  unique.forEach((key) => {
+    if (!prev) {
+      run = 1;
+    } else {
+      const diff = (new Date(key).getTime() - new Date(prev).getTime()) / DAY_MS;
+      run = diff === 1 ? run + 1 : 1;
+    }
+    prev = key;
+    if (run > best) {
+      best = run;
+    }
+  });
+
+  const dateSet = new Set(unique);
+  const todayKey = toDateKey(new Date());
+  let current = 0;
+  if (todayKey) {
+    let cursor = todayKey;
+    while (dateSet.has(cursor)) {
+      current += 1;
+      cursor = stepDateKey(cursor, -1);
+    }
+  }
+
+  return {
+    current,
+    best: Math.max(best, current),
+  };
+};
+
 export default function WorkoutLogScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const [workouts, setWorkouts] = useState<Workout[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [personalRecords, setPersonalRecords] = useState<PersonalRecord[]>([]);
+  const [streak, setStreak] = useState<{ current: number; best: number }>({
+    current: 0,
+    best: 0,
+  });
 
   const loadWorkouts = useCallback(async () => {
     setIsLoading(true);
@@ -40,6 +112,14 @@ export default function WorkoutLogScreen() {
         (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
       );
       setWorkouts(sorted);
+      setStreak(computeStreakStats(sorted));
+
+      const storedRecords =
+        ((await getData('personalRecords')) as PersonalRecordMap | null) ?? {};
+      const orderedRecords = Object.values(storedRecords).sort(
+        (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
+      );
+      setPersonalRecords(orderedRecords);
     } finally {
       setIsLoading(false);
     }
@@ -59,9 +139,13 @@ export default function WorkoutLogScreen() {
     () => workouts.reduce((sum, workout) => sum + (workout.xpEarned ?? 0), 0),
     [workouts],
   );
+  const topRecords = useMemo(
+    () => personalRecords.slice(0, 4),
+    [personalRecords],
+  );
 
   return (
-    <ThemedView style={styles.container}>
+    <ThemedView style={[styles.container, { paddingTop: 20 + insets.top }]}>
       <View style={styles.headerRow}>
         <ThemedText style={styles.title}>Workout Log</ThemedText>
         <Pressable style={styles.primaryButton} onPress={() => router.push('/workout')}>
@@ -84,6 +168,44 @@ export default function WorkoutLogScreen() {
         </View>
       </View>
 
+      <View style={styles.streakChips}>
+        <View style={styles.streakChip}>
+          <Text style={styles.streakIcon}>🔥</Text>
+          <Text style={styles.streakChipText}>{streak.current}d</Text>
+        </View>
+        <View style={styles.streakChip}>
+          <Text style={styles.streakIcon}>🏆</Text>
+          <Text style={styles.streakChipText}>{streak.best}d</Text>
+        </View>
+      </View>
+
+
+      <View style={styles.prSection}>
+        <View style={styles.prHeader}>
+          <Text style={styles.sectionTitle}>Personal Records</Text>
+          <Text style={styles.prHint}>
+            {personalRecords.length ? 'Auto-tracked from your best sets' : 'No records yet'}
+          </Text>
+        </View>
+        {topRecords.length === 0 ? (
+          <Text style={styles.helperText}>Log a workout to set your first PR.</Text>
+        ) : (
+          <View style={styles.prList}>
+            {topRecords.map((record) => (
+              <View key={record.id} style={styles.prCard}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.prName}>{record.exercise}</Text>
+                  <Text style={styles.prMeta}>
+                    Max weight {Math.round(record.maxWeight)} - Volume {Math.round(record.totalVolume)}
+                  </Text>
+                </View>
+                <Text style={styles.prDate}>{formatDate(record.updatedAt)}</Text>
+              </View>
+            ))}
+          </View>
+        )}
+      </View>
+
       {isLoading ? (
         <View style={styles.loadingState}>
           <ActivityIndicator size="large" color="#38BDF8" />
@@ -92,44 +214,55 @@ export default function WorkoutLogScreen() {
       ) : workouts.length === 0 ? (
         <View style={styles.emptyState}>
           <Text style={styles.emptyText}>
-            No workouts logged yet. Tap “New Workout” to get started.
+            No workouts logged yet. Tap "New Workout" to get started.
           </Text>
         </View>
       ) : (
         <ScrollView contentContainerStyle={styles.logList}>
-          {workouts.map((workout, index) => (
-            <View key={workout.id ?? `${workout.title}-${index}`} style={styles.workoutCard}>
-              <View style={styles.cardHeader}>
-                <Text style={styles.cardTitle}>{workout.title || 'Untitled workout'}</Text>
-                <Text style={styles.cardXp}>+{workout.xpEarned ?? 0} XP</Text>
-              </View>
-              <Text style={styles.cardMeta}>
-                {formatDate(workout.date)} • {workout.exercises.length} exercises
-              </Text>
-              {workout.notes ? <Text style={styles.cardNotes}>{workout.notes}</Text> : null}
-              <View style={styles.exerciseList}>
-                {workout.exercises.slice(0, 3).map((exercise, exerciseIndex) => (
-                  <View key={`${exercise.name}-${exerciseIndex}`} style={styles.exerciseRow}>
-                    <Text style={styles.exerciseName}>{exercise.name || 'Exercise'}</Text>
-                    <Text style={styles.exerciseSets}>{exercise.sets.length} sets</Text>
+          {workouts.map((workout, index) => {
+            const prCount = workout.prAchievements?.length ?? 0;
+            const prBonus =
+              workout.prAchievements?.reduce((sum, pr) => sum + pr.xpBonus, 0) ?? 0;
+            return (
+              <View key={workout.id ?? `${workout.title}-${index}`} style={styles.workoutCard}>
+                <View style={styles.cardHeader}>
+                  <Text style={styles.cardTitle}>{workout.title || 'Untitled workout'}</Text>
+                  <Text style={styles.cardXp}>+{workout.xpEarned ?? 0} XP</Text>
+                </View>
+                <Text style={styles.cardMeta}>
+                  {formatDate(workout.date)} - {workout.exercises.length} exercises
+                </Text>
+                {workout.notes ? <Text style={styles.cardNotes}>{workout.notes}</Text> : null}
+                {prCount ? (
+                  <View style={styles.prBadge}>
+                    <Text style={styles.prBadgeText}>
+                      {prCount} PR{prCount > 1 ? 's' : ''} (+{prBonus} XP)
+                    </Text>
                   </View>
-                ))}
-                {workout.exercises.length > 3 ? (
-                  <Text style={styles.moreText}>
-                    +{workout.exercises.length - 3} more exercises
+                ) : null}
+                <View style={styles.exerciseList}>
+                  {workout.exercises.slice(0, 3).map((exercise, exerciseIndex) => (
+                    <View key={`${exercise.name}-${exerciseIndex}`} style={styles.exerciseRow}>
+                      <Text style={styles.exerciseName}>{exercise.name || 'Exercise'}</Text>
+                      <Text style={styles.exerciseSets}>{exercise.sets.length} sets</Text>
+                    </View>
+                  ))}
+                  {workout.exercises.length > 3 ? (
+                    <Text style={styles.moreText}>+{workout.exercises.length - 3} more exercises</Text>
+                  ) : null}
+                </View>
+                {typeof workout.totalVolume === 'number' ? (
+                  <Text style={styles.cardFooter}>
+                    Volume {workout.totalVolume} - Time logged{' '}
+                    {new Date(workout.date).toLocaleTimeString([], {
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })}
                   </Text>
                 ) : null}
               </View>
-              {typeof workout.totalVolume === 'number' ? (
-                <Text style={styles.cardFooter}>
-                  Volume {workout.totalVolume} • Time logged {new Date(workout.date).toLocaleTimeString([], {
-                    hour: '2-digit',
-                    minute: '2-digit',
-                  })}
-                </Text>
-              ) : null}
-            </View>
-          ))}
+            );
+          })}
         </ScrollView>
       )}
     </ThemedView>
@@ -139,17 +272,20 @@ export default function WorkoutLogScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    padding: 20,
+    paddingHorizontal: 20,
+    paddingBottom: 20,
     gap: 16,
   },
   headerRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    marginTop: 8,
   },
   title: {
     fontSize: 28,
     fontWeight: '700',
+    color: '#F8FAFC',
   },
   primaryButton: {
     backgroundColor: '#38BDF8',
@@ -174,14 +310,95 @@ const styles = StyleSheet.create({
     borderColor: '#1F2A44',
   },
   summaryLabel: {
-    color: '#94A3B8',
+    color: '#CBD5F5',
     fontSize: 12,
     marginBottom: 4,
   },
   summaryValue: {
-    color: '#F8FAFC',
+    color: '#E2E8F0',
     fontSize: 18,
     fontWeight: '600',
+  },
+  streakChips: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  streakChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#0B1120',
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#1F2A44',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    gap: 6,
+  },
+  streakIcon: {
+    fontSize: 14,
+  },
+  streakChipText: {
+    color: '#F8FAFC',
+    fontWeight: '600',
+  },
+  sectionTitle: {
+    color: '#E2E8F0',
+    fontSize: 20,
+    fontWeight: '600',
+  },
+  prSection: {
+    gap: 12,
+  },
+  prHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  prHint: {
+    color: '#CBD5F5',
+    fontSize: 12,
+  },
+  prList: {
+    gap: 10,
+  },
+  prCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#1F2A44',
+    borderRadius: 12,
+    padding: 12,
+    backgroundColor: '#111E33',
+    gap: 12,
+  },
+  prName: {
+    color: '#E2E8F0',
+    fontWeight: '600',
+  },
+  prMeta: {
+    color: '#CBD5F5',
+    fontSize: 12,
+  },
+  prDate: {
+    color: '#CBD5F5',
+    fontSize: 12,
+  },
+  prBadge: {
+    alignSelf: 'flex-start',
+    backgroundColor: 'rgba(56,189,248,0.12)',
+    borderRadius: 999,
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    marginTop: 6,
+  },
+  prBadgeText: {
+    color: '#38BDF8',
+    fontWeight: '600',
+    fontSize: 12,
+  },
+  helperText: {
+    color: '#E2E8F0',
+    textAlign: 'center',
   },
   loadingState: {
     flex: 1,
@@ -190,7 +407,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   loadingText: {
-    color: '#94A3B8',
+    color: '#CBD5F5',
   },
   emptyState: {
     flex: 1,
@@ -199,7 +416,7 @@ const styles = StyleSheet.create({
     padding: 40,
   },
   emptyText: {
-    color: '#94A3B8',
+    color: '#CBD5F5',
     textAlign: 'center',
   },
   logList: {
@@ -220,7 +437,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   cardTitle: {
-    color: '#F8FAFC',
+    color: '#E2E8F0',
     fontSize: 18,
     fontWeight: '600',
   },
@@ -229,7 +446,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   cardMeta: {
-    color: '#94A3B8',
+    color: '#CBD5F5',
     fontSize: 13,
   },
   cardNotes: {
@@ -244,18 +461,37 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   exerciseName: {
-    color: '#F8FAFC',
+    color: '#E2E8F0',
   },
   exerciseSets: {
-    color: '#94A3B8',
+    color: '#CBD5F5',
   },
   moreText: {
-    color: '#94A3B8',
+    color: '#CBD5F5',
     fontStyle: 'italic',
   },
   cardFooter: {
-    color: '#64748B',
+    color: '#CBD5F5',
     fontSize: 12,
     marginTop: 4,
   },
 });
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
