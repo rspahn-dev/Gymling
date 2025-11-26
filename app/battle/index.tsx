@@ -1,4 +1,19 @@
-﻿import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { createAiRival, monsters } from '@/constants/monsters';
+import { useCreature } from '@/hooks/use-creature';
+import { usePlayerStats } from '@/hooks/use-player-stats';
+import {
+  BattlePrepKey,
+  BattlePrepState,
+  computeXpGain,
+  defaultBattlePrep,
+  ENERGY_COST,
+  getTodayKey,
+  prepOptions,
+} from '@/lib/battle';
+import { getMaxEnergyForLevel } from '@/lib/energy';
+import { getData } from '@/utils/storage';
+import { Link, useFocusEffect, useRouter } from 'expo-router';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -9,30 +24,21 @@ import {
   Text,
   View,
 } from 'react-native';
-import { Link, useFocusEffect, useRouter } from 'expo-router';
-import { monsters } from '@/constants/monsters';
-import { useCreature } from '@/hooks/use-creature';
-import { usePlayerStats } from '@/hooks/use-player-stats';
-import { getData, storeData } from '@/utils/storage';
-import { getMaxEnergyForLevel, clampEnergyToLevel } from '@/lib/energy';
-import {
-  BattlePrepState,
-  BattlePrepKey,
-  defaultBattlePrep,
-  ENERGY_COST,
-  prepOptions,
-  getTodayKey,
-  computeXpGain,
-} from '@/lib/battle';
 
 
 export default function BattleScreen() {
   const router = useRouter();
   const { creature, isCreatureLoading } = useCreature();
+  const gymlingName = creature?.name?.trim() || 'Your Gymling';
   const { playerStats, isPlayerStatsLoading } = usePlayerStats();
   const energy = playerStats?.energy ?? 0;
+  const maxEnergy = useMemo(
+    () => getMaxEnergyForLevel(creature?.level ?? 1),
+    [creature?.level],
+  );
   const playerXp = playerStats?.xp ?? 0;
-  const [selectedMonsterId, setSelectedMonsterId] = useState(monsters[0].id);
+  const roster = useMemo(() => [createAiRival(creature), ...monsters], [creature]);
+  const [selectedMonsterId, setSelectedMonsterId] = useState(() => roster[0].id);
   const [battlePrep, setBattlePrep] = useState<BattlePrepState>({ ...defaultBattlePrep });
   const [isBattleLocked, setIsBattleLocked] = useState(false);
   const [isBattling, setIsBattling] = useState(false);
@@ -50,17 +56,17 @@ export default function BattleScreen() {
 
   const availableMonsters = useMemo(() => {
     if (!creature) {
-      return monsters.slice(0, 3);
+      return roster.slice(0, 3);
     }
-    const filtered = monsters
+    const filtered = roster
       .filter((monster) => Math.abs(monster.level - creature.level) <= 10)
       .sort(
         (a, b) =>
           Math.abs(a.level - creature.level) - Math.abs(b.level - creature.level),
       );
-    const pool = filtered.length > 0 ? filtered : monsters;
+    const pool = filtered.length > 0 ? filtered : roster;
     return pool.slice(0, 3);
-  }, [creature]);
+  }, [creature, roster]);
 
   useEffect(() => {
     if (availableMonsters.length === 0) {
@@ -75,8 +81,8 @@ export default function BattleScreen() {
     () =>
       availableMonsters.find((monster) => monster.id === selectedMonsterId) ??
       availableMonsters[0] ??
-      monsters[0],
-    [availableMonsters, selectedMonsterId],
+      roster[0],
+    [availableMonsters, selectedMonsterId, roster],
   );
 
   const rewardSummary = useMemo(() => {
@@ -90,7 +96,9 @@ export default function BattleScreen() {
 
   const statusMessage = useMemo(() => {
     if (isBattleLocked) {
-      return 'Your creature needs to recover before entering the arena again.';
+      // return `${gymlingName} needs to recover before entering the arena again.`;
+      return `${gymlingName} needs to recover before entering the arena again.`;
+
     }
     if (energy < ENERGY_COST) {
       const deficit = Math.max(0, ENERGY_COST - energy);
@@ -115,11 +123,11 @@ export default function BattleScreen() {
         value: isBattleLocked ? 'Locked' : 'Open',
         hint: isBattleLocked ? 'Log a workout to reset' : 'Ready for combat',
       },
-      {
-        label: 'Matchup',
-        value: `${monsterDelta >= 0 ? '+' : ''}${monsterDelta}`,
-        hint: `vs ${selectedMonster.name}`,
-      },
+      // {
+      //   label: 'Matchup',
+      //   value: `${monsterDelta >= 0 ? '+' : ''}${monsterDelta}`,
+      //   hint: `vs ${selectedMonster.name}`,
+      // },
     ];
   }, [energy, isBattleLocked, selectedMonster, creature]);
 
@@ -173,11 +181,11 @@ export default function BattleScreen() {
               {statusMessage}
             </Text>
           </View>
-          <View style={styles.energyBadge}>
-            <Text style={styles.energyLabel}>Energy</Text>
-            <Text style={styles.energyValue}>{energy}</Text>
-            <Text style={styles.energySub}>XP {playerXp}</Text>
-          </View>
+          {/* <View style={styles.energyBadge}> */}
+            {/* <Text style={styles.energyLabel}>Energy</Text> */}
+            {/* <Text style={styles.energyValue}>{energy}</Text> */}
+            {/* <Text style={styles.energySub}>XP {playerXp}</Text> */}
+          {/* </View> */}
         </View>
         <View style={styles.statusRow}>
           {statusHighlights.map((tile) => (
@@ -193,7 +201,7 @@ export default function BattleScreen() {
       {isBattleLocked && (
         <View style={styles.lockBanner}>
           <Text style={styles.lockText}>
-            Your creature must recover. Log a workout to battle again today.
+            {gymlingName} must recover. Log a workout to battle again today.
           </Text>
         </View>
       )}
@@ -232,7 +240,7 @@ export default function BattleScreen() {
           </Pressable>
           <Link href="/creature" asChild>
             <Pressable style={styles.secondaryButton}>
-              <Text style={styles.secondaryButtonText}>Edit Loadout</Text>
+              <Text style={styles.secondaryButtonText}>Creature check</Text>
             </Pressable>
           </Link>
         </View>
@@ -287,7 +295,7 @@ export default function BattleScreen() {
               onPress={() => togglePrep(key)}
             >
               <View style={[styles.checkbox, active && styles.checkboxActive]}>
-                {active ? <Text style={styles.checkboxMark}>âœ“</Text> : null}
+                {active ? <Text style={styles.checkboxMark}>✓</Text> : null}
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={styles.checklistTitle}>{title}</Text>
@@ -612,6 +620,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
 });
+
 
 
 

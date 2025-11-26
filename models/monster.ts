@@ -1,4 +1,4 @@
-export type ElementType = 'Fire' | 'Water' | 'Earth' | 'Air' | 'Lightning' | 'Shadow';
+export type ElementType = 'Fire' | 'Water' | 'Earth' | 'Air' | 'Lightning' | 'Shadow' | 'Light';
 
 export interface Monster {
   id: string;
@@ -14,3 +14,4 @@ export interface Monster {
   featuredLoot: string;
   icon: string;
 }
+

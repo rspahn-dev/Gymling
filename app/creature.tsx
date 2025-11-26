@@ -1,10 +1,18 @@
-﻿import React, { useMemo } from 'react';
-import { View, Text, StyleSheet, ScrollView, Image } from 'react-native';
+﻿import { useCreature } from '@/hooks/use-creature';
+import type { Creature } from '@/models/creature';
 import { Link } from 'expo-router';
-import { useCreature } from '@/hooks/use-creature';
+import React, { useMemo } from 'react';
+import { Image, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 const FALLBACK_IMAGE =
   'https://images.unsplash.com/photo-1517836357463-d25dfeac3438?w=300&h=300&fit=crop';
+
+const STAT_ICONS: Record<keyof Creature['stats'], string> = {
+  str: '💪',
+  agi: '💨',
+  sta: '❤️',
+  int: '🧠',
+};
 
 export default function CreatureScreen() {
   const { creature, isCreatureLoading } = useCreature();
@@ -71,22 +79,27 @@ export default function CreatureScreen() {
 
         <Text style={styles.sectionTitle}>Core Stats</Text>
         <View style={styles.statsContainer}>
-          {Object.entries(creature.stats).map(([key, value]) => (
-            <View key={key} style={styles.statCard}>
-              <View style={styles.statHeader}>
-                <Text style={styles.statLabel}>{key.toUpperCase()}</Text>
-                <Text style={styles.statValue}>{value}</Text>
+          {Object.entries(creature.stats).map(([key, value]) => {
+            const icon = STAT_ICONS[key as keyof Creature['stats']] ?? '✨';
+            return (
+              <View key={key} style={styles.statCard}>
+                <View style={styles.statHeader}>
+                  <Text style={styles.statLabel}>
+                    <Text style={styles.statIcon}>{icon}</Text> {key.toUpperCase()}
+                  </Text>
+                  <Text style={styles.statValue}>{value}</Text>
+                </View>
+                <View style={styles.progressBar}>
+                  <View
+                    style={[
+                      styles.progressFill,
+                      { width: `${Math.min((value / 20) * 100, 100)}%` },
+                    ]}
+                  />
+                </View>
               </View>
-              <View style={styles.progressBar}>
-                <View
-                  style={[
-                    styles.progressFill,
-                    { width: `${Math.min((value / 20) * 100, 100)}%` },
-                  ]}
-                />
-              </View>
-            </View>
-          ))}
+            );
+          })}
         </View>
 
         <Text style={styles.sectionTitle}>Bag</Text>
@@ -237,6 +250,9 @@ const styles = StyleSheet.create({
     color: '#94A3B8',
     fontSize: 14,
   },
+  statIcon: {
+    fontSize: 16,
+  },
   statValue: {
     color: '#F8FAFC',
     fontWeight: '600',
@@ -282,4 +298,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
 });
+
+
 

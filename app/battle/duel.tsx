@@ -1,30 +1,28 @@
-﻿import React, { useEffect, useMemo, useState } from 'react';
+import { createAiRival, monsters } from '@/constants/monsters';
+import { useCreature } from '@/hooks/use-creature';
+import { usePlayerStats } from '@/hooks/use-player-stats';
+import {
+  BattleEvent,
+  BattlePrepState,
+  computeXpGain,
+  defaultBattlePrep,
+  ENERGY_COST,
+  getTodayKey,
+  prepOptions,
+  simulateBattle,
+} from '@/lib/battle';
+import { getData, storeData } from '@/utils/storage';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Image,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
-  View,
+  View
 } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import { monsters } from '@/constants/monsters';
-import { useCreature } from '@/hooks/use-creature';
-import { usePlayerStats } from '@/hooks/use-player-stats';
-import { getData, storeData } from '@/utils/storage';
-import { getMaxEnergyForLevel, clampEnergyToLevel } from '@/lib/energy';
-import {
-  BattleEvent,
-  BattlePrepState,
-  defaultBattlePrep,
-  ENERGY_COST,
-  prepOptions,
-  getTodayKey,
-  simulateBattle,
-  computeXpGain,
-} from '@/lib/battle';
 
 const parsePrepState = (value?: string): BattlePrepState => {
   if (!value) {
@@ -60,13 +58,15 @@ export default function DuelScreen() {
   const [isResolving, setIsResolving] = useState(false);
   const [hasStarted, setHasStarted] = useState(false);
   const [pendingSummary, setPendingSummary] = useState<{ xpGain: number; result: 'win' | 'lose' } | null>(null);
-
+  const energy = playerStats?.energy ?? 0;
   const battlePrep = useMemo(() => parsePrepState(params.prep as string | undefined), [params.prep]);
-
+  const roster = useMemo(() => [createAiRival(creature), ...monsters], [creature]);
+  const creatureAvatar = creature?.imageUrl?.trim() ||
+        'https://images.unsplash.com/photo-1517836357463-d25dfeac3438?w=300&h=300&fit=crop';
   const selectedMonster = useMemo(() => {
-    const monster = monsters.find((m) => m.id === params.monsterId);
-    return monster ?? monsters[0];
-  }, [params.monsterId]);
+    const monster = roster.find((m) => m.id === params.monsterId);
+    return monster ?? roster[0];
+  }, [params.monsterId, roster]);
 
   const startBattle = async () => {
     if (!creature || !playerStats || !selectedMonster) {
@@ -175,25 +175,18 @@ export default function DuelScreen() {
 
   return (
     <ScrollView contentContainerStyle={styles.scrollContent}>
-      <View style={styles.cinematicCard}>
-        <View style={styles.vsRow}>
+      {/* <View style={styles.vsRow}> */}
           <View style={styles.combatant}>
+            <Image source={{ uri: creatureAvatar }} style={styles.creatureIcon} />
             <Text style={styles.combatantName}>{creature.name || 'Your creature'}</Text>
             <View style={styles.hpBar}>
               <View style={[styles.hpFill, { width: `${creatureHpPercent}%` }]} />
             </View>
             <Text style={styles.hpLabel}>{Math.max(liveCreatureHP, 0)} HP</Text>
           </View>
-          <Text style={styles.vsTag}>VS</Text>
-          <View style={styles.combatant}>
-            <Image source={{ uri: selectedMonster.icon }} style={styles.monsterIcon} />
-            <Text style={styles.combatantName}>{selectedMonster.name}</Text>
-            <View style={styles.hpBar}>
-              <View style={[styles.hpFillMonster, { width: `${monsterHpPercent}%` }]} />
-            </View>
-            <Text style={styles.hpLabel}>{Math.max(liveMonsterHP, 0)} HP</Text>
-          </View>
-        </View>
+          {/* <Text style={styles.vsTag}>VS</Text> */}
+        {/* </View> */}
+      <View style={styles.cinematicCard}>
         {activePrep.length > 0 && (
           <View style={styles.prepRow}>
             {activePrep.map((prep) => (
@@ -226,6 +219,14 @@ export default function DuelScreen() {
           <Text style={styles.summaryHint}>Cinematic in progress...</Text>
         )}
       </View>
+      <View style={styles.combatant}>
+            <Image source={{ uri: selectedMonster.icon }} style={styles.monsterIcon} />
+            <Text style={styles.combatantName}>{selectedMonster.name}</Text>
+            <View style={styles.hpBar}>
+              <View style={[styles.hpFillMonster, { width: `${monsterHpPercent}%` }]} />
+            </View>
+            <Text style={styles.hpLabel}>{Math.max(liveMonsterHP, 0)} HP</Text>
+          </View>
     </ScrollView>
   );
 }
@@ -258,6 +259,8 @@ const styles = StyleSheet.create({
     borderColor: '#1F2A44',
     padding: 16,
     gap: 12,
+    marginTop: 30,
+    marginBottom: 30,
   },
   vsRow: {
     flexDirection: 'row',
@@ -300,9 +303,17 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '700',
   },
+  creatureIcon: {
+    width: 100,
+    height: 100,
+    borderRadius: 999,
+    borderWidth: 2,
+    borderColor: '#1F2A44',
+    marginTop: 16,
+  },
   monsterIcon: {
-    width: 48,
-    height: 48,
+    width: 100,
+    height: 100,
     borderRadius: 999,
     borderWidth: 1,
     borderColor: '#1F2A44',
@@ -372,4 +383,5 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 });
+
 

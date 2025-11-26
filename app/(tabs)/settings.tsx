@@ -41,6 +41,19 @@ const defaultSettings: UserSettings = {
 
 const unitOptions: UserSettings['unitSystem'][] = ['imperial', 'metric'];
 
+const FITBIT_SETTINGS_KEY = 'fitbitSettings';
+
+type FitbitSettings = {
+  isConnected: boolean;
+  deviceName: string;
+  lastSync?: string;
+};
+
+const defaultFitbitSettings: FitbitSettings = {
+  isConnected: false,
+  deviceName: 'Fitbit Tracker',
+};
+
 export default function SettingsScreen() {
   const { creature, updateCreature, isCreatureLoading } = useCreature();
   const { updatePlayerStats } = usePlayerStats();
@@ -51,6 +64,8 @@ export default function SettingsScreen() {
   const [isSaving, setIsSaving] = useState(false);
   const [settings, setSettings] = useState<UserSettings>(defaultSettings);
   const [isSettingsLoading, setIsSettingsLoading] = useState(true);
+  const [fitbitSettings, setFitbitSettings] = useState<FitbitSettings>(defaultFitbitSettings);
+  const [isFitbitLoading, setIsFitbitLoading] = useState(true);
 
   useEffect(() => {
     if (creature) {
@@ -68,6 +83,17 @@ export default function SettingsScreen() {
       setIsSettingsLoading(false);
     };
     void hydrateSettings();
+  }, []);
+
+  useEffect(() => {
+    const hydrateFitbitSettings = async () => {
+      const stored = (await getData(FITBIT_SETTINGS_KEY)) as FitbitSettings | null;
+      if (stored) {
+        setFitbitSettings({ ...defaultFitbitSettings, ...stored });
+      }
+      setIsFitbitLoading(false);
+    };
+    void hydrateFitbitSettings();
   }, []);
 
   const previewImage = useMemo(() => {
@@ -96,6 +122,37 @@ export default function SettingsScreen() {
       return;
     }
     await persistSettings({ ...settings, unitSystem });
+  };
+
+  const persistFitbitSettings = async (next: FitbitSettings, notice?: string) => {
+    setFitbitSettings(next);
+    await storeData(FITBIT_SETTINGS_KEY, next);
+    if (notice) {
+      setStatusMessage(notice);
+    }
+  };
+
+  const handleDeviceNameChange = (value: string) => {
+    setFitbitSettings((prev) => ({ ...prev, deviceName: value }));
+  };
+
+  const handlePersistDeviceName = async () => {
+    const deviceName = fitbitSettings.deviceName.trim() || defaultFitbitSettings.deviceName;
+    await persistFitbitSettings({ ...fitbitSettings, deviceName }, 'Device nickname saved.');
+  };
+
+  const handleConnectFitbit = async () => {
+    const deviceName = fitbitSettings.deviceName.trim() || defaultFitbitSettings.deviceName;
+    await persistFitbitSettings({
+      ...fitbitSettings,
+      isConnected: true,
+      deviceName,
+      lastSync: new Date().toISOString(),
+    }, 'Fitbit connected locally.');
+  };
+
+  const handleDisconnectFitbit = async () => {
+    await persistFitbitSettings({ ...fitbitSettings, isConnected: false, lastSync: undefined }, 'Fitbit disconnected.');
   };
 
   const handleExportData = async () => {
@@ -143,6 +200,7 @@ export default function SettingsScreen() {
             await storeData('personalRecords', {});
             await storeData('battleLock', null);
             await persistSettings(defaultSettings);
+            await persistFitbitSettings(defaultFitbitSettings);
             setStatusMessage('All progress cleared.');
             setIsSaving(false);
           },
@@ -151,7 +209,10 @@ export default function SettingsScreen() {
     );
   };
 
-  const disableSettings = isSaving || isSettingsLoading;
+  const disableSettings = isSaving || isSettingsLoading || isFitbitLoading;
+  const formattedLastSync = fitbitSettings.lastSync
+    ? new Date(fitbitSettings.lastSync).toLocaleString()
+    : 'Never';
 
   const handleSaveProfile = async () => {
     if (!creature) {
@@ -320,6 +381,55 @@ export default function SettingsScreen() {
         </View>
 
         <View style={styles.card}>
+        <Text style={styles.cardHeading}>Fitbit Integration</Text>
+        {isFitbitLoading ? (
+          <Text style={styles.settingHint}>Checking connection...</Text>
+        ) : (
+          <>
+            <View style={styles.fitbitStatusRow}>
+              <Text style={styles.settingLabel}>Status</Text>
+              <Text
+                style={[
+                  styles.fitbitStatusValue,
+                  fitbitSettings.isConnected ? styles.statusPositive : styles.statusNeutral,
+                ]}
+              >
+                {fitbitSettings.isConnected ? 'Connected' : 'Disconnected'}
+              </Text>
+            </View>
+            <Text style={styles.settingHint}>Last sync: {formattedLastSync}</Text>
+            <View style={styles.fitbitActions}>
+              <Pressable
+                style={[
+                  styles.fitbitActionButton,
+                  styles.fitbitConnectButton,
+                  (fitbitSettings.isConnected || disableSettings) && styles.disabled,
+                ]}
+                onPress={handleConnectFitbit}
+                disabled={disableSettings || fitbitSettings.isConnected}
+              >
+                <Text style={styles.fitbitActionPrimaryText}>Connect</Text>
+              </Pressable>
+              <Pressable
+                style={[
+                  styles.fitbitActionButton,
+                  styles.fitbitDisconnectButton,
+                  (!fitbitSettings.isConnected || disableSettings) && styles.disabled,
+                ]}
+                onPress={handleDisconnectFitbit}
+                disabled={disableSettings || !fitbitSettings.isConnected}
+              >
+                <Text style={styles.fitbitActionDangerText}>Disconnect</Text>
+              </Pressable>
+            </View>
+            <Text style={styles.fitbitDisclaimer}>
+              Fitbit data stays on this device. Manage your account directly in the Fitbit app.
+            </Text>
+          </>
+        )}
+      </View>
+
+      <View style={styles.card}>
           <Text style={styles.cardHeading}>Data & Privacy</Text>
           <View style={styles.buttonGroup}>
             <Pressable style={styles.outlineButton} onPress={handleShowStorageSummary} disabled={disableSettings}>
@@ -378,6 +488,55 @@ const styles = StyleSheet.create({
     color: '#94A3B8',
     fontSize: 12,
     marginTop: 2,
+  },
+  fitbitStatusRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  fitbitStatusValue: {
+    fontWeight: '600',
+  },
+  statusPositive: {
+    color: '#34D399',
+  },
+  statusNeutral: {
+    color: '#F87171',
+  },
+  fitbitInput: {
+    marginTop: 8,
+  },
+  fitbitActions: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 12,
+  },
+  fitbitActionButton: {
+    flex: 1,
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#1F2A44',
+  },
+  fitbitConnectButton: {
+    backgroundColor: '#38BDF8',
+    borderColor: '#38BDF8',
+  },
+  fitbitDisconnectButton: {
+    borderColor: '#F87171',
+  },
+  fitbitActionPrimaryText: {
+    color: '#0B1120',
+    fontWeight: '700',
+  },
+  fitbitActionDangerText: {
+    color: '#F87171',
+    fontWeight: '600',
+  },
+  fitbitDisclaimer: {
+    color: '#94A3B8',
+    fontSize: 12,
   },
   avatarRow: {
     flexDirection: 'row',

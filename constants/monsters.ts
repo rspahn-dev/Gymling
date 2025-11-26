@@ -1,5 +1,77 @@
-import { Monster } from '@/models/monster';
+// import blueHydra from '@/assets/images/blue_hydra.png';
+import type { Creature } from '@/models/creature';
+import { ElementType, Monster } from '@/models/monster';
+import { Image } from 'react-native';
 
+const monsterIcons = {
+  // 'ai-rival': require('@/assets/images/ai-rival.png'),
+  'hydra-prime': require('@/assets/images/blue_hydra.png'),
+};
+
+
+
+const statElementAffinity: Record<keyof Creature['stats'], ElementType> = {
+  str: 'Fire',
+  agi: 'Air',
+  sta: 'Earth',
+  int: 'Lightning',
+};
+
+const elementOpposites: Record<ElementType, ElementType> = {
+  Fire: 'Water',
+  Water: 'Fire',
+  Earth: 'Air',
+  Air: 'Earth',
+  Lightning: 'Shadow',
+  Shadow: 'Light',
+  Light: 'Shadow',
+};
+
+const fallbackStats = {
+  str: 1,
+  agi: 1,
+  sta: 1,
+  int: 1,
+};
+
+const getDominantElement = (creature: Creature | null): ElementType => {
+  if (!creature) {
+    return 'Shadow';
+  }
+  const entries = Object.entries(creature.stats) as Array<[keyof Creature['stats'], number]>;
+  const [topKey] = entries.sort((a, b) => b[1] - a[1])[0] ?? ['str', 1];
+  return statElementAffinity[topKey] ?? 'Shadow';
+};
+
+const getOppositeElement = (element: ElementType): ElementType => elementOpposites[element] ?? 'Shadow';
+
+export const createAiRival = (creature: Creature | null): Monster => {
+  const stats = creature?.stats ?? fallbackStats;
+  const playerElement = getDominantElement(creature);
+  const rivalElement = getOppositeElement(playerElement);
+  const rivalLevel = Math.max(2, (creature?.level ?? 1) + 1);
+  const totalStats = stats.str + stats.agi + stats.sta + stats.int;
+  const health = Math.round((stats.sta + rivalLevel) * 22 + totalStats * 1.6);
+  const attack = Math.round(stats.str * 1.4 + stats.agi * 1.1 + rivalLevel * 2.5);
+  const defense = Math.round(stats.sta * 0.9 + stats.int * 1.2 + rivalLevel * 1.5);
+  const xpReward = Math.max(60, rivalLevel * 12);
+  const recommendedStr = Math.max(stats.str + 2, Math.round(rivalLevel * 0.8) + 5);
+
+  return {
+    id: 'ai-rival',
+    name: 'Trainer 9000',
+    level: rivalLevel,
+    element: rivalElement,
+    health,
+    attack,
+    defense,
+    recommendedStr,
+    description: `An adaptive construct that inverts your ${playerElement.toLowerCase()} style into ${rivalElement.toLowerCase()} counters. Always arrives one step ahead.`,
+    xpReward,
+    featuredLoot: 'Mirror Core',
+    icon: Image.resolveAssetSource(monsterIcons['hydra-prime']).uri,
+  };
+};
 export const monsters: Monster[] = [
   {
     id: 'hydra-prime',
@@ -199,3 +271,11 @@ export const monsters: Monster[] = [
     icon: 'https://images.unsplash.com/photo-1441974231531-c6227db76b6e?w=96&h=96&fit=crop',
   },
 ];
+
+
+
+
+
+
+
+

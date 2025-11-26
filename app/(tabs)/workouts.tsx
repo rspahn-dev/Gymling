@@ -47,6 +47,14 @@ const stepDateKey = (key: string, delta: number) => {
   return date.toISOString().slice(0, 10);
 };
 
+type FitbitSettings = {
+  isConnected: boolean;
+  deviceName: string;
+  lastSync?: string;
+};
+
+const FITBIT_SETTINGS_KEY = 'fitbitSettings';
+
 const computeStreakStats = (entries: Workout[]) => {
   if (!entries.length) {
     return { current: 0, best: 0 };
@@ -98,6 +106,7 @@ export default function WorkoutLogScreen() {
   const [workouts, setWorkouts] = useState<Workout[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [personalRecords, setPersonalRecords] = useState<PersonalRecord[]>([]);
+  const [fitbitSettings, setFitbitSettings] = useState<FitbitSettings | null>(null);
   const [streak, setStreak] = useState<{ current: number; best: number }>({
     current: 0,
     best: 0,
@@ -125,16 +134,30 @@ export default function WorkoutLogScreen() {
     }
   }, []);
 
+  const loadFitbitSettings = useCallback(async () => {
+    const stored = (await getData(FITBIT_SETTINGS_KEY)) as FitbitSettings | null;
+    setFitbitSettings(stored ?? null);
+  }, []);
+
   useFocusEffect(
     useCallback(() => {
       loadWorkouts();
-    }, [loadWorkouts]),
+      loadFitbitSettings();
+    }, [loadWorkouts, loadFitbitSettings]),
   );
 
   const totalVolume = useMemo(
     () => workouts.reduce((sum, workout) => sum + (workout.totalVolume ?? 0), 0),
     [workouts],
   );
+  const fitbitChipStatus = fitbitSettings?.isConnected
+    ? fitbitSettings?.lastSync
+      ? `Synced ${new Date(fitbitSettings.lastSync).toLocaleDateString(undefined, {
+          month: 'short',
+          day: 'numeric',
+        })}`
+      : 'Synced'
+    : 'Connected';
   const totalXp = useMemo(
     () => workouts.reduce((sum, workout) => sum + (workout.xpEarned ?? 0), 0),
     [workouts],
@@ -145,126 +168,139 @@ export default function WorkoutLogScreen() {
   );
 
   return (
-    <ThemedView style={[styles.container, { paddingTop: 20 + insets.top }]}>
-      <View style={styles.headerRow}>
-        <ThemedText style={styles.title}>Workout Log</ThemedText>
-        <Pressable style={styles.primaryButton} onPress={() => router.push('/workout')}>
-          <Text style={styles.primaryButtonText}>New Workout</Text>
-        </Pressable>
-      </View>
+    <ThemedView style={styles.container}>
+      <ScrollView
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingTop: insets.top + 20, paddingBottom: Math.max(insets.bottom, 32) },
+        ]}
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.headerRow}>
+          <ThemedText style={styles.title}>Workout Log</ThemedText>
+          <Pressable style={styles.primaryButton} onPress={() => router.push('/workout')}>
+            <Text style={styles.primaryButtonText}>New Workout</Text>
+          </Pressable>
+        </View>
 
-      <View style={styles.summaryRow}>
-        <View style={styles.summaryCard}>
-          <Text style={styles.summaryLabel}>Sessions</Text>
-          <Text style={styles.summaryValue}>{workouts.length}</Text>
-        </View>
-        <View style={styles.summaryCard}>
-          <Text style={styles.summaryLabel}>XP Earned</Text>
-          <Text style={styles.summaryValue}>{totalXp}</Text>
-        </View>
-        <View style={styles.summaryCard}>
-          <Text style={styles.summaryLabel}>Volume</Text>
-          <Text style={styles.summaryValue}>{totalVolume}</Text>
-        </View>
-      </View>
-
-      <View style={styles.streakChips}>
-        <View style={styles.streakChip}>
-          <Text style={styles.streakIcon}>🔥</Text>
-          <Text style={styles.streakChipText}>{streak.current}d</Text>
-        </View>
-        <View style={styles.streakChip}>
-          <Text style={styles.streakIcon}>🏆</Text>
-          <Text style={styles.streakChipText}>{streak.best}d</Text>
-        </View>
-      </View>
-
-
-      <View style={styles.prSection}>
-        <View style={styles.prHeader}>
-          <Text style={styles.sectionTitle}>Personal Records</Text>
-          <Text style={styles.prHint}>
-            {personalRecords.length ? 'Auto-tracked from your best sets' : 'No records yet'}
-          </Text>
-        </View>
-        {topRecords.length === 0 ? (
-          <Text style={styles.helperText}>Log a workout to set your first PR.</Text>
-        ) : (
-          <View style={styles.prList}>
-            {topRecords.map((record) => (
-              <View key={record.id} style={styles.prCard}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.prName}>{record.exercise}</Text>
-                  <Text style={styles.prMeta}>
-                    Max weight {Math.round(record.maxWeight)} - Volume {Math.round(record.totalVolume)}
-                  </Text>
-                </View>
-                <Text style={styles.prDate}>{formatDate(record.updatedAt)}</Text>
-              </View>
-            ))}
+        <View style={styles.summaryRow}>
+          <View style={styles.summaryCard}>
+            <Text style={styles.summaryLabel}>Sessions</Text>
+            <Text style={styles.summaryValue}>{workouts.length}</Text>
           </View>
-        )}
-      </View>
+          <View style={styles.summaryCard}>
+            <Text style={styles.summaryLabel}>XP Earned</Text>
+            <Text style={styles.summaryValue}>{totalXp}</Text>
+          </View>
+          <View style={styles.summaryCard}>
+            <Text style={styles.summaryLabel}>Volume</Text>
+            <Text style={styles.summaryValue}>{totalVolume}</Text>
+          </View>
+        </View>
 
-      {isLoading ? (
-        <View style={styles.loadingState}>
-          <ActivityIndicator size="large" color="#38BDF8" />
-          <Text style={styles.loadingText}>Loading workouts...</Text>
+        <View style={styles.streakChips}>
+          <View style={styles.streakChip}>
+            <Text style={styles.streakIcon}>🔥</Text>
+            <Text style={styles.streakChipText}>{streak.current}d</Text>
+          </View>
+          <View style={styles.streakChip}>
+            <Text style={styles.streakIcon}>🏆</Text>
+            <Text style={styles.streakChipText}>{streak.best}d</Text>
+          </View>
+          <Pressable
+            style={[styles.streakChip, styles.fitbitChip]}
+            onPress={() => router.push('/settings')}
+          >
+            <Text style={styles.fitbitIcon}>⌚</Text>
+            <View>
+              <Text style={styles.fitbitChipLabel}>Fitbit</Text>
+              <Text style={styles.fitbitChipStatus}>{fitbitChipStatus}</Text>
+            </View>
+          </Pressable>
         </View>
-      ) : workouts.length === 0 ? (
-        <View style={styles.emptyState}>
-          <Text style={styles.emptyText}>
-            No workouts logged yet. Tap "New Workout" to get started.
-          </Text>
-        </View>
-      ) : (
-        <ScrollView contentContainerStyle={styles.logList}>
-          {workouts.map((workout, index) => {
-            const prCount = workout.prAchievements?.length ?? 0;
-            const prBonus =
-              workout.prAchievements?.reduce((sum, pr) => sum + pr.xpBonus, 0) ?? 0;
-            return (
-              <View key={workout.id ?? `${workout.title}-${index}`} style={styles.workoutCard}>
-                <View style={styles.cardHeader}>
-                  <Text style={styles.cardTitle}>{workout.title || 'Untitled workout'}</Text>
-                  <Text style={styles.cardXp}>+{workout.xpEarned ?? 0} XP</Text>
+
+        <View style={styles.prSection}>
+          <View style={styles.prHeader}>
+            <Text style={styles.sectionTitle}>Personal Records</Text>
+            <Text style={styles.prHint}>
+              {personalRecords.length ? 'Auto-tracked from your best sets' : 'No records yet'}
+            </Text>
+          </View>
+          {topRecords.length === 0 ? (
+            <Text style={styles.helperText}>Log a workout to set your first PR.</Text>
+          ) : (
+            <View style={styles.prGrid}>
+              {topRecords.map((record) => (
+                <View key={record.id} style={styles.prChip}>
+                  <Text style={styles.prChipWeight}>{Math.round(record.maxWeight)} lbs</Text>
+                  <Text style={styles.prChipName}>{record.exercise}</Text>
+                  <Text style={styles.prChipMeta}>{formatDate(record.updatedAt)}</Text>
                 </View>
-                <Text style={styles.cardMeta}>
-                  {formatDate(workout.date)} - {workout.exercises.length} exercises
-                </Text>
-                {workout.notes ? <Text style={styles.cardNotes}>{workout.notes}</Text> : null}
-                {prCount ? (
-                  <View style={styles.prBadge}>
-                    <Text style={styles.prBadgeText}>
-                      {prCount} PR{prCount > 1 ? 's' : ''} (+{prBonus} XP)
-                    </Text>
+              ))}
+            </View>
+          )}
+        </View>
+
+        {isLoading ? (
+          <View style={styles.loadingState}>
+            <ActivityIndicator size="large" color="#38BDF8" />
+            <Text style={styles.loadingText}>Loading workouts...</Text>
+          </View>
+        ) : workouts.length === 0 ? (
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyText}>
+              No workouts logged yet. Tap "New Workout" to get started.
+            </Text>
+          </View>
+        ) : (
+          <View style={styles.logList}>
+            {workouts.map((workout, index) => {
+              const prCount = workout.prAchievements?.length ?? 0;
+              const prBonus =
+                workout.prAchievements?.reduce((sum, pr) => sum + pr.xpBonus, 0) ?? 0;
+              return (
+                <View key={workout.id ?? `${workout.title}-${index}`} style={styles.workoutCard}>
+                  <View style={styles.cardHeader}>
+                    <Text style={styles.cardTitle}>{workout.title || 'Untitled workout'}</Text>
+                    <Text style={styles.cardXp}>+{workout.xpEarned ?? 0} XP</Text>
                   </View>
-                ) : null}
-                <View style={styles.exerciseList}>
-                  {workout.exercises.slice(0, 3).map((exercise, exerciseIndex) => (
-                    <View key={`${exercise.name}-${exerciseIndex}`} style={styles.exerciseRow}>
-                      <Text style={styles.exerciseName}>{exercise.name || 'Exercise'}</Text>
-                      <Text style={styles.exerciseSets}>{exercise.sets.length} sets</Text>
+                  <Text style={styles.cardMeta}>
+                    {formatDate(workout.date)} - {workout.exercises.length} exercises
+                  </Text>
+                  {workout.notes ? <Text style={styles.cardNotes}>{workout.notes}</Text> : null}
+                  {prCount ? (
+                    <View style={styles.prBadge}>
+                      <Text style={styles.prBadgeText}>
+                        {prCount} PR{prCount > 1 ? 's' : ''} (+{prBonus} XP)
+                      </Text>
                     </View>
-                  ))}
-                  {workout.exercises.length > 3 ? (
-                    <Text style={styles.moreText}>+{workout.exercises.length - 3} more exercises</Text>
+                  ) : null}
+                  <View style={styles.exerciseList}>
+                    {workout.exercises.slice(0, 3).map((exercise, exerciseIndex) => (
+                      <View key={`${exercise.name}-${exerciseIndex}`} style={styles.exerciseRow}>
+                        <Text style={styles.exerciseName}>{exercise.name || 'Exercise'}</Text>
+                        <Text style={styles.exerciseSets}>{exercise.sets.length} sets</Text>
+                      </View>
+                    ))}
+                    {workout.exercises.length > 3 ? (
+                      <Text style={styles.moreText}>+{workout.exercises.length - 3} more exercises</Text>
+                    ) : null}
+                  </View>
+                  {typeof workout.totalVolume === 'number' ? (
+                    <Text style={styles.cardFooter}>
+                      Volume {workout.totalVolume} - Time logged{' '}
+                      {new Date(workout.date).toLocaleTimeString([], {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })}
+                    </Text>
                   ) : null}
                 </View>
-                {typeof workout.totalVolume === 'number' ? (
-                  <Text style={styles.cardFooter}>
-                    Volume {workout.totalVolume} - Time logged{' '}
-                    {new Date(workout.date).toLocaleTimeString([], {
-                      hour: '2-digit',
-                      minute: '2-digit',
-                    })}
-                  </Text>
-                ) : null}
-              </View>
-            );
-          })}
-        </ScrollView>
-      )}
+              );
+            })}
+          </View>
+        )}
+      </ScrollView>
     </ThemedView>
   );
 }
@@ -272,8 +308,10 @@ export default function WorkoutLogScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#020617',
+  },
+  scrollContent: {
     paddingHorizontal: 20,
-    paddingBottom: 20,
     gap: 16,
   },
   headerRow: {
@@ -341,6 +379,23 @@ const styles = StyleSheet.create({
     color: '#F8FAFC',
     fontWeight: '600',
   },
+  fitbitChip: {
+    paddingVertical: 8,
+  },
+  fitbitIcon: {
+    fontSize: 16,
+    marginRight: 4,
+    color: '#38BDF8',
+  },
+  fitbitChipLabel: {
+    color: '#E2E8F0',
+    fontWeight: '600',
+    fontSize: 12,
+  },
+  fitbitChipStatus: {
+    color: '#38BDF8',
+    fontSize: 11,
+  },
   sectionTitle: {
     color: '#E2E8F0',
     fontSize: 20,
@@ -358,30 +413,34 @@ const styles = StyleSheet.create({
     color: '#CBD5F5',
     fontSize: 12,
   },
-  prList: {
-    gap: 10,
-  },
-  prCard: {
+  prGrid: {
     flexDirection: 'row',
-    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  prChip: {
+    flexBasis: '48%',
+    backgroundColor: '#111E33',
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: '#1F2A44',
-    borderRadius: 12,
-    padding: 12,
-    backgroundColor: '#111E33',
-    gap: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    gap: 4,
   },
-  prName: {
+  prChipWeight: {
+    color: '#F8FAFC',
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  prChipName: {
     color: '#E2E8F0',
     fontWeight: '600',
+    fontSize: 13,
   },
-  prMeta: {
+  prChipMeta: {
     color: '#CBD5F5',
-    fontSize: 12,
-  },
-  prDate: {
-    color: '#CBD5F5',
-    fontSize: 12,
+    fontSize: 11,
   },
   prBadge: {
     alignSelf: 'flex-start',

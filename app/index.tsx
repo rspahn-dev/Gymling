@@ -2,6 +2,7 @@ import { useCreature } from '@/hooks/use-creature';
 import { usePlayerStats } from '@/hooks/use-player-stats';
 import { ENERGY_COST } from '@/lib/battle';
 import { getMaxEnergyForLevel } from '@/lib/energy';
+import type { Creature } from '@/models/creature';
 import { getData, storeData } from '@/utils/storage';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
@@ -23,6 +24,13 @@ import {
 const FALLBACK_IMAGE =
   'https://images.unsplash.com/photo-1517836357463-d25dfeac3438?w=600&h=600&fit=crop';
 const placeholderColor = '#94A3B8';
+
+const STAT_ICONS: Record<keyof Creature['stats'], string> = {
+  str: '💪',
+  agi: '💨',
+  sta: '❤️',
+  int: '🧠',
+};
 
 const primaryActions = [
   {
@@ -48,7 +56,6 @@ const primaryActions = [
 export default function HomeScreen() {
   const { creature, isCreatureLoading, updateCreature } = useCreature();
   const { playerStats } = usePlayerStats();
-
   const [isOnboardingVisible, setIsOnboardingVisible] = useState(false);
   const [onboardingName, setOnboardingName] = useState('');
   const [onboardingImage, setOnboardingImage] = useState('');
@@ -154,7 +161,7 @@ export default function HomeScreen() {
           <Image source={{ uri: previewImage }} style={styles.heroImage} />
           <View style={styles.heroInfo}>
             <Text style={styles.heroName}>{gymlingName}</Text>
-            <Text style={styles.heroMeta}>Level {creature.level} � Stage {creature.evolutionStage}</Text>
+            <Text style={styles.heroMeta}>Level {creature.level} � Stage {creature.evolutionStage}</Text>
             <View style={styles.progressBar}>
               <View style={[styles.progressFill, { width: `${(xpProgress * 100).toFixed(0)}%` }]} />
             </View>
@@ -165,14 +172,19 @@ export default function HomeScreen() {
         </View>
 
         <View style={styles.statsGrid}>
-          {Object.entries(creature.stats).map(([statKey, statValue]) => (
-            <View key={statKey} style={styles.statTile}>
-              <View style={styles.statRow}>
-                <Text style={styles.statLabel}>{statKey.toUpperCase()}</Text>
-                <Text style={styles.statValue}>{statValue}</Text>
+          {Object.entries(creature.stats).map(([statKey, statValue]) => {
+            const icon = STAT_ICONS[statKey as keyof Creature['stats']] ?? '✨';
+            return (
+              <View key={statKey} style={styles.statTile}>
+                <View style={styles.statRow}>
+                  <Text style={styles.statLabel}>
+                    <Text style={styles.statIcon}>{icon}</Text> {statKey.toUpperCase()}
+                  </Text>
+                  <Text style={styles.statValue}>{statValue}</Text>
+                </View>
               </View>
-            </View>
-          ))}
+            );
+          })}
         </View>
 
         <View style={styles.calloutRow}>
@@ -330,6 +342,10 @@ const styles = StyleSheet.create({
     color: '#94A3B8',
     textTransform: 'uppercase',
     fontSize: 12,
+  },
+  statIcon: {
+    fontSize: 14,
+    marginRight: 4,
   },
   statValue: {
     color: '#F8FAFC',

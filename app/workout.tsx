@@ -1,4 +1,17 @@
-﻿import React, { useEffect, useMemo, useState } from 'react';
+import { ThemedText } from '@/components/themed-text';
+import { ThemedView } from '@/components/themed-view';
+import { useCreature } from '@/hooks/use-creature';
+import { usePlayerStats } from '@/hooks/use-player-stats';
+import { getMaxEnergyForLevel } from '@/lib/energy';
+import type { Creature } from '@/models/creature';
+import { checkEvolution } from '@/models/evolution';
+import type { Exercise } from '@/models/exercise';
+import type { PersonalRecordMap, PRAchievement } from '@/models/personalRecord';
+import type { Workout } from '@/models/workout';
+import type { WorkoutSet } from '@/models/workoutSet';
+import { getData, storeData } from '@/utils/storage';
+import { useRouter } from 'expo-router';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   Pressable,
@@ -9,19 +22,6 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
-import { getData, storeData } from '@/utils/storage';
-import { getMaxEnergyForLevel } from '@/lib/energy';
-import type { Workout } from '@/models/workout';
-import type { Exercise } from '@/models/exercise';
-import type { WorkoutSet } from '@/models/workoutSet';
-import type { Creature } from '@/models/creature';
-import type { PersonalRecordMap, PRAchievement } from '@/models/personalRecord';
-import { checkEvolution } from '@/models/evolution';
-import { ThemedView } from '@/components/themed-view';
-import { ThemedText } from '@/components/themed-text';
-import { useCreature } from '@/hooks/use-creature';
-import { usePlayerStats } from '@/hooks/use-player-stats';
 
 type WorkoutTemplate = {
   id: string;
@@ -43,6 +43,7 @@ const deepCopyExercises = (exercises: Exercise[]): Exercise[] =>
   exercises.map((exercise) => ({
     name: exercise.name,
     sets: exercise.sets.map((set) => ({ ...set })),
+    cardio: exercise.cardio?.map((segment) => ({ ...segment })) ?? [],
   }));
 
 const createWorkoutFromTemplate = (workout: Workout): Workout => ({
@@ -51,6 +52,73 @@ const createWorkoutFromTemplate = (workout: Workout): Workout => ({
   date: new Date().toISOString(),
   exercises: deepCopyExercises(workout.exercises),
 });
+
+const buildPresetWorkout = (
+  id: string,
+  title: string,
+  notes: string,
+  exercises: Array<{ name: string; reps: number[]; weight?: number }>,
+): Workout => ({
+  id,
+  title,
+  date: new Date(0).toISOString(),
+  notes,
+  exercises: exercises.map(({ name, reps, weight = 0 }) => ({
+    name,
+    sets: reps.map((rep) => ({ reps: rep, weight })),
+  })),
+});
+
+const presetTemplates: WorkoutTemplate[] = [
+  {
+    id: 'preset-chest-tris',
+    name: 'Chest / Triceps Workout',
+    workout: buildPresetWorkout(
+      'preset-chest-tris-workout',
+      'Chest + Triceps Power',
+      'Upper push focus emphasizing presses and arm finishers.',
+      [
+        { name: 'Barbell Bench Press', reps: [10, 8, 6] },
+        { name: 'Incline Dumbbell Press', reps: [12, 10, 8] },
+        { name: 'Cable Fly', reps: [15, 12, 12] },
+        { name: 'Triceps Pushdown', reps: [12, 10, 10] },
+        { name: 'Overhead Triceps Extension', reps: [12, 12] },
+      ],
+    ),
+  },
+  {
+    id: 'preset-back-bis',
+    name: 'Back / Biceps Workout',
+    workout: buildPresetWorkout(
+      'preset-back-bis-workout',
+      'Back + Biceps Pull',
+      'Pull session with rows, pulldowns, and curl variations.',
+      [
+        { name: 'Deadlift', reps: [6, 5, 4] },
+        { name: 'Bent-Over Row', reps: [10, 8, 8] },
+        { name: 'Lat Pulldown', reps: [12, 10, 10] },
+        { name: 'Face Pull', reps: [15, 15] },
+        { name: 'Alternating Dumbbell Curl', reps: [12, 10, 10] },
+      ],
+    ),
+  },
+  {
+    id: 'preset-leg-shoulder',
+    name: 'Leg / Shoulder Workout',
+    workout: buildPresetWorkout(
+      'preset-leg-shoulder-workout',
+      'Legs + Shoulders',
+      'Lower-body strength with shoulder finishers.',
+      [
+        { name: 'Back Squat', reps: [10, 8, 6] },
+        { name: 'Romanian Deadlift', reps: [10, 10, 8] },
+        { name: 'Walking Lunge', reps: [12, 12] },
+        { name: 'Seated Shoulder Press', reps: [12, 10, 8] },
+        { name: 'Lateral Raise', reps: [15, 15, 12] },
+      ],
+    ),
+  },
+];
 
 const computeStatBoosts = (
   workout: Workout,
@@ -218,20 +286,30 @@ export default function NewWorkoutScreen() {
 
   const hasLoggedSets = useMemo(
     () =>
-      workout.exercises.some(
-        (exercise) =>
-          exercise.name.trim().length > 0 &&
-          exercise.sets.some((set) => set.reps > 0 && set.weight >= 0),
-      ),
+      workout.exercises.some((exercise) => {
+        if (exercise.name.trim().length === 0) {
+          return false;
+        }
+        const hasSets = exercise.sets.some((set) => set.reps > 0 && set.weight >= 0);
+        const hasCardio = (exercise.cardio ?? []).some(
+          (segment) => segment.duration > 0 || segment.distance > 0,
+        );
+        return hasSets || hasCardio;
+      }),
     [workout.exercises],
   );
 
   useEffect(() => {
     const loadTemplates = async () => {
       const stored = (await getData('workoutTemplates')) as WorkoutTemplate[] | null;
-      setTemplates(stored ?? []);
+      if (!stored || stored.length === 0) {
+        setTemplates(presetTemplates);
+        await storeData('workoutTemplates', presetTemplates);
+      } else {
+        setTemplates(stored);
+      }
     };
-    loadTemplates();
+    void loadTemplates();
   }, []);
 
   const updateExercises = (updater: (current: Exercise[]) => Exercise[]) => {
@@ -242,7 +320,7 @@ export default function NewWorkoutScreen() {
   };
 
   const addExercise = () => {
-    const newExercise: Exercise = { name: 'New Exercise', sets: [] };
+    const newExercise: Exercise = { name: 'New Exercise', sets: [], cardio: [] };
     updateExercises((current) => [...current, newExercise]);
   };
 
@@ -258,6 +336,52 @@ export default function NewWorkoutScreen() {
           ? { ...exercise, sets: [...exercise.sets, newSet] }
           : exercise,
       ),
+    );
+  };
+
+  const addCardioSegment = (exerciseIndex: number) => {
+    updateExercises((current) =>
+      current.map((exercise, index) =>
+        index === exerciseIndex
+          ? {
+              ...exercise,
+              cardio: [...(exercise.cardio ?? []), { duration: 0, distance: 0 }],
+            }
+          : exercise,
+      ),
+    );
+  };
+
+  const handleCardioChange = (
+    exerciseIndex: number,
+    cardioIndex: number,
+    field: 'duration' | 'distance',
+    value: string,
+  ) => {
+    const numericValue = Number(value) || 0;
+    updateExercises((current) =>
+      current.map((exercise, index) => {
+        if (index !== exerciseIndex) {
+          return exercise;
+        }
+        const cardio = exercise.cardio ?? [];
+        const nextCardio = cardio.map((segment, idx) =>
+          idx === cardioIndex ? { ...segment, [field]: numericValue } : segment,
+        );
+        return { ...exercise, cardio: nextCardio };
+      }),
+    );
+  };
+
+  const removeCardioSegment = (exerciseIndex: number, cardioIndex: number) => {
+    updateExercises((current) =>
+      current.map((exercise, index) => {
+        if (index !== exerciseIndex) {
+          return exercise;
+        }
+        const nextCardio = (exercise.cardio ?? []).filter((_, idx) => idx !== cardioIndex);
+        return { ...exercise, cardio: nextCardio };
+      }),
     );
   };
 
@@ -333,7 +457,7 @@ export default function NewWorkoutScreen() {
 
   const handleApplyTemplate = (template: WorkoutTemplate) => {
     setWorkout(createWorkoutFromTemplate(template.workout));
-    setStatusMessage(`Loaded template "${template.name}".`);
+    // setStatusMessage(`Loaded template "${template.name}".`);
   };
 
   const saveWorkout = async () => {
@@ -499,6 +623,46 @@ export default function NewWorkoutScreen() {
             <Pressable style={styles.secondaryButton} onPress={() => addSet(exerciseIndex)}>
               <Text style={styles.secondaryButtonText}>Add Set</Text>
             </Pressable>
+            {(exercise.cardio ?? []).map((segment, cardioIndex) => (
+              <View
+                key={`cardio-segment-${exerciseIndex}-${cardioIndex}`}
+                style={styles.cardioRow}
+              >
+                <View style={styles.setInputGroup}>
+                  <Text style={styles.setLabel}>Time (min)</Text>
+                  <TextInput
+                    keyboardType="numeric"
+                    value={segment.duration.toString()}
+                    placeholderTextColor={placeholderColor}
+                    onChangeText={(value) =>
+                      handleCardioChange(exerciseIndex, cardioIndex, 'duration', value)
+                    }
+                    style={styles.setInput}
+                  />
+                </View>
+                <View style={styles.setInputGroup}>
+                  <Text style={styles.setLabel}>Distance (mi)</Text>
+                  <TextInput
+                    keyboardType="numeric"
+                    value={segment.distance.toString()}
+                    placeholderTextColor={placeholderColor}
+                    onChangeText={(value) =>
+                      handleCardioChange(exerciseIndex, cardioIndex, 'distance', value)
+                    }
+                    style={styles.setInput}
+                  />
+                </View>
+                <Pressable onPress={() => removeCardioSegment(exerciseIndex, cardioIndex)}>
+                  <Text style={styles.removeText}>X</Text>
+                </Pressable>
+              </View>
+            ))}
+            <Pressable
+              style={styles.secondaryButton}
+              onPress={() => addCardioSegment(exerciseIndex)}
+            >
+              <Text style={styles.secondaryButtonText}>Add Cardio</Text>
+            </Pressable>
           </View>
         ))}
 
@@ -522,6 +686,7 @@ export default function NewWorkoutScreen() {
           <View style={styles.templateInputRow}>
             <TextInput
               placeholder="Template name"
+              placeholderTextColor={placeholderColor}
               value={templateName}
               onChangeText={setTemplateName}
               style={[styles.textInput, styles.templateInput]}
@@ -664,6 +829,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 12,
   },
+  cardioRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginTop: 12,
+  },
   setInputGroup: {
     flex: 1,
   },
@@ -737,6 +908,8 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 });
+
+
 
 
 
