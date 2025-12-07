@@ -1,4 +1,4 @@
-import { useCreature } from '@/hooks/use-creature';
+﻿import { useCreature } from '@/hooks/use-creature';
 import { usePlayerStats } from '@/hooks/use-player-stats';
 import { ENERGY_COST } from '@/lib/battle';
 import { getMaxEnergyForLevel } from '@/lib/energy';
@@ -6,7 +6,7 @@ import type { Creature } from '@/models/creature';
 import { getData, storeData } from '@/utils/storage';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import { Link } from 'expo-router';
+import { Link, type Href } from 'expo-router';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
@@ -27,12 +27,19 @@ const placeholderColor = '#94A3B8';
 
 const STAT_ICONS: Record<keyof Creature['stats'], string> = {
   str: '💪',
-  agi: '💨',
+  agi: '⚡',
   sta: '❤️',
   int: '🧠',
 };
 
-const primaryActions = [
+type PrimaryAction = {
+  label: string;
+  href: Href;
+  icon: React.ComponentProps<typeof Ionicons>['name'];
+  accent: string;
+};
+
+const primaryActions: PrimaryAction[] = [
   {
     label: 'Battle Arena',
     href: '/battle',
@@ -90,6 +97,7 @@ export default function HomeScreen() {
     }
     return Math.min(creature.xp / creature.xpToNext, 1);
   }, [creature]);
+  const xpProgressWidth = `${Math.round(xpProgress * 100)}%` as `${number}%`;
 
   const energy = playerStats?.energy ?? 0;
   const totalXp = playerStats?.xp ?? 0;
@@ -163,7 +171,7 @@ export default function HomeScreen() {
             <Text style={styles.heroName}>{gymlingName}</Text>
             <Text style={styles.heroMeta}>Level {creature.level} � Stage {creature.evolutionStage}</Text>
             <View style={styles.progressBar}>
-              <View style={[styles.progressFill, { width: `${(xpProgress * 100).toFixed(0)}%` }]} />
+              <View style={[styles.progressFill, { width: xpProgressWidth }]} />
             </View>
             <Text style={styles.progressLabel}>
               {creature.xp} / {creature.xpToNext} XP to evolve
@@ -508,6 +516,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 });
+
 
 
 

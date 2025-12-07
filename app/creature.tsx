@@ -9,7 +9,7 @@ const FALLBACK_IMAGE =
 
 const STAT_ICONS: Record<keyof Creature['stats'], string> = {
   str: '💪',
-  agi: '💨',
+  agi: '⚡',
   sta: '❤️',
   int: '🧠',
 };
@@ -81,6 +81,7 @@ export default function CreatureScreen() {
         <View style={styles.statsContainer}>
           {Object.entries(creature.stats).map(([key, value]) => {
             const icon = STAT_ICONS[key as keyof Creature['stats']] ?? '✨';
+            const fillWidth = `${Math.min((value / 20) * 100, 100)}%` as `${number}%`;
             return (
               <View key={key} style={styles.statCard}>
                 <View style={styles.statHeader}>
@@ -93,7 +94,7 @@ export default function CreatureScreen() {
                   <View
                     style={[
                       styles.progressFill,
-                      { width: `${Math.min((value / 20) * 100, 100)}%` },
+                      { width: fillWidth },
                     ]}
                   />
                 </View>
